@@ -73,6 +73,11 @@ def fetch_remote_builds(
     return builds
 
 
+def build_url(build: TheRockBuild, index_url: str = DEFAULT_INDEX_URL) -> str:
+    """Return the direct download URL for `build`'s tarball."""
+    return index_url.rstrip("/") + "/" + build.filename
+
+
 def download_build(
     build: TheRockBuild,
     dest_dir: Path,
@@ -102,7 +107,7 @@ def download_build(
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / build.filename
-    url = index_url.rstrip("/") + "/" + build.filename
+    url = build_url(build, index_url)
 
     read = 0
     for attempt in range(1, _MAX_RETRIES + 1):
@@ -126,6 +131,15 @@ def download_build(
                         read += len(chunk)
                         if on_progress is not None:
                             on_progress(read, total)
+
+            if total and read < total:
+                # Connection closed early without raising; treat as a
+                # transient failure so the next attempt resumes via Range.
+                if attempt == _MAX_RETRIES:
+                    raise OSError(
+                        f"Download incomplete: got {read} of {total} bytes"
+                    )
+                continue
             return dest_path
         except _RETRYABLE_ERRORS:
             if attempt == _MAX_RETRIES:

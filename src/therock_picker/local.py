@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,6 +55,14 @@ def scan_local_directory(path: Path) -> list[LocalEntry]:
 
     entries.sort(key=lambda entry: entry.build.version, reverse=True)
     return entries
+
+
+def delete_entry(entry: LocalEntry) -> None:
+    """Remove `entry`'s tarball file or extracted directory from disk."""
+    if entry.extracted:
+        shutil.rmtree(entry.path)
+    else:
+        entry.path.unlink()
 
 
 def update_symlink(target: Path, link: Path) -> Path:

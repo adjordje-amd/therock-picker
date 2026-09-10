@@ -9,6 +9,7 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
+from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -27,23 +28,30 @@ from textual.widgets import (
 from textual.widgets.data_table import RowKey
 
 from therock_picker.config import load_therock_path, save_therock_path
+from therock_picker.confirm_screen import ConfirmScreen
 from therock_picker.gpu_detect import detect_local_gfx_targets, gfx_bucket_matches
 from therock_picker.local import (
     LocalEntry,
+    delete_entry,
     scan_local_directory,
     selected_link,
     update_symlink,
     versions_dir,
 )
 from therock_picker.models import TheRockBuild
-from therock_picker.remote import download_build, extract_build, fetch_remote_builds
+from therock_picker.remote import (
+    build_url,
+    download_build,
+    extract_build,
+    fetch_remote_builds,
+)
 from therock_picker.update import current_version, fetch_latest_version, is_newer, perform_update
 
 _ALL_GFX = "__all__"
 _ALL_PLATFORM = "__all__"
 _SYSTEM_TO_PLATFORM = {"Linux": "linux", "Windows": "windows"}
 
-_REMOTE_COLUMNS = ("Version", "GFX Target", "Variant", "Platform")
+_REMOTE_COLUMNS = ("Version", "GFX Target", "Variant", "Platform", "URL")
 _LOCAL_COLUMNS = ("Version", "GFX Target", "Variant", "Platform", "Type", "Path")
 
 
@@ -104,6 +112,7 @@ class TheRockApp(App[None]):
                     with Horizontal(id="local_actions"):
                         yield Button("Scan directory", id="scan_button", compact=True)
                         yield Button("Select", id="select_button", compact=True)
+                        yield Button("Delete", id="delete_button", compact=True)
                     yield DataTable(id="local_table")
             with TabPane("Remote", id="remote_tab"):
                 with Vertical(id="remote_tab_body"):
@@ -250,6 +259,32 @@ class TheRockApp(App[None]):
         self._set_status(f"Symlink updated: {link} -> {entry.path}")
         self._refresh_selected_label()
 
+    @on(Button.Pressed, "#delete_button")
+    def _handle_delete(self) -> None:
+        entry = self._selected_local_entry
+        if entry is None:
+            self._set_status("Select a local build to delete first.")
+            return
+        self.push_screen(
+            ConfirmScreen(f"Delete {entry.path.name}? This cannot be undone."),
+            self._on_delete_confirmed,
+        )
+
+    def _on_delete_confirmed(self, confirmed: bool) -> None:
+        if not confirmed:
+            return
+        self._delete_worker(self._selected_local_entry)
+
+    @work(thread=True, exclusive=True)
+    def _delete_worker(self, entry: LocalEntry) -> None:
+        self.call_from_thread(self._set_status, f"Deleting {entry.path.name}...")
+        try:
+            delete_entry(entry)
+        except OSError as exc:
+            self.call_from_thread(self._set_status, f"Delete failed: {exc}")
+            return
+        self.call_from_thread(self._handle_scan)
+
     @on(Button.Pressed, "#refresh_button")
     def _handle_refresh(self) -> None:
         self._fetch_remote_builds()
@@ -320,11 +355,13 @@ class TheRockApp(App[None]):
                 and build.platform != platform_filter
             ):
                 continue
+            url = build_url(build)
             row_key = table.add_row(
                 build.version,
                 build.gfx_target,
                 build.variant or "-",
                 build.platform,
+                Text(url, style=f"link {url}"),
             )
             self._remote_row_builds[row_key] = build
 
@@ -368,14 +405,20 @@ class TheRockApp(App[None]):
         )
         try:
             extracted_path = extract_build(archive_path, dest_dir)
-            archive_path.unlink()
         except (OSError, tarfile.TarError) as exc:
             self.call_from_thread(self._set_status, f"Extraction failed: {exc}")
             return
 
+        cleanup_warning = ""
+        try:
+            archive_path.unlink()
+        except OSError as exc:
+            cleanup_warning = f" (couldn't remove {archive_path.name}: {exc})"
+
         link = update_symlink(extracted_path, symlink)
         self.call_from_thread(
-            self._set_status, f"Installed. Symlink updated: {link} -> {extracted_path}"
+            self._set_status,
+            f"Installed. Symlink updated: {link} -> {extracted_path}{cleanup_warning}",
         )
         self.call_from_thread(self._refresh_selected_label)
 
