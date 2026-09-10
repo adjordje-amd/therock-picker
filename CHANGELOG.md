@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+### Changed
+- Replaced the in-app update banner and `u` keybinding with a `--update` CLI flag (`therock-picker --update`) that checks GitHub Releases and self-updates via pipx, then exits.
+
 ## 0.3.1
 
 ### Fixed

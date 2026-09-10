@@ -45,7 +45,7 @@ from therock_picker.remote import (
     extract_build,
     fetch_remote_builds,
 )
-from therock_picker.update import current_version, fetch_latest_version, is_newer, perform_update
+from therock_picker.update import current_version
 
 _ALL_GFX = "__all__"
 _ALL_PLATFORM = "__all__"
@@ -79,7 +79,7 @@ class TheRockApp(App[None]):
     TabPane { height: 1fr; }
     """
 
-    BINDINGS = [("q", "quit", "Quit"), ("u", "update_app", "Update")]
+    BINDINGS = [("q", "quit", "Quit")]
 
     def __init__(self) -> None:
         super().__init__()
@@ -92,7 +92,6 @@ class TheRockApp(App[None]):
         self._detected_platform = _SYSTEM_TO_PLATFORM.get(
             platform_module.system()
         )
-        self._latest_version: Optional[str] = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -105,7 +104,6 @@ class TheRockApp(App[None]):
                 compact=True,
             )
         yield Label("", id="selected_label")
-        yield Label("", id="update_banner")
         with TabbedContent():
             with TabPane("Local", id="local_tab"):
                 with Vertical(id="local_tab_body"):
@@ -150,7 +148,6 @@ class TheRockApp(App[None]):
 
         self._fetch_remote_builds()
         self._refresh_selected_label()
-        self._check_update_worker()
 
     def _therock_path(self) -> Path:
         raw_path = self.query_one("#dir_input", Input).value or load_therock_path()
@@ -159,41 +156,6 @@ class TheRockApp(App[None]):
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status_label", Label).update(message)
-
-    def _set_update_banner(self, message: str) -> None:
-        self.query_one("#update_banner", Label).update(message)
-
-    @work(thread=True)
-    def _check_update_worker(self) -> None:
-        latest = fetch_latest_version()
-        if latest is not None and is_newer(latest, current_version()):
-            self._latest_version = latest
-            self.call_from_thread(
-                self._set_update_banner,
-                f"Update available: v{latest} (press 'u' to update)",
-            )
-
-    def action_update_app(self) -> None:
-        if self._latest_version is None:
-            self._set_status("Already up to date.")
-            return
-        self._update_worker(self._latest_version)
-
-    @work(thread=True, exclusive=True)
-    def _update_worker(self, latest_version: str) -> None:
-        self.call_from_thread(self._set_status, f"Updating to v{latest_version}...")
-        success, output = perform_update()
-        if success:
-            self._latest_version = None
-            self.call_from_thread(self._set_update_banner, "")
-            self.call_from_thread(
-                self._set_status,
-                f"Updated to v{latest_version}. Restart the app to use it.",
-            )
-        else:
-            self.call_from_thread(
-                self._set_status, f"Update failed: {output[-200:]}"
-            )
 
     def _refresh_selected_label(self) -> None:
         link = selected_link(self._therock_path())
