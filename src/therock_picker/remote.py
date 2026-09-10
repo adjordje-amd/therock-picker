@@ -5,8 +5,10 @@ from __future__ import annotations
 import http.client
 import json
 import re
+import shutil
 import socket
 import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -18,7 +20,7 @@ DEFAULT_INDEX_URL = "https://rocm.nightlies.amd.com/tarball-multi-arch/"
 
 _FILES_RE = re.compile(r"const files = (\[.*?\]);", re.S)
 _CHUNK_SIZE = 1 << 16
-_READ_TIMEOUT = 60
+_READ_TIMEOUT = 300
 _MAX_RETRIES = 5
 
 # Transient network errors worth retrying (mid-transfer stalls, resets),
@@ -162,16 +164,30 @@ def extract_build(archive_path: Path, dest_dir: Path) -> Path:
 
     Returns:
         Path to the extracted directory.
+
+    Raises:
+        OSError, tarfile.TarError: If extraction is interrupted; no
+            partial directory is left behind in that case.
     """
+    dest_dir.mkdir(parents=True, exist_ok=True)
     extract_to = dest_dir / archive_path.name[: -len(".tar.gz")]
-    extract_to.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive_path, "r:gz") as tar:
-        # TheRock tarballs are official AMD-published builds (trusted
-        # source) and contain absolute symlinks baked in from the build
-        # machine; the strict `data_filter` rejects those as escaping the
-        # destination, so use `fully_trusted_filter` instead.
-        tar.extractall(
-            extract_to,
-            filter=getattr(tarfile, "fully_trusted_filter", None),
-        )
+
+    tmp_dir = Path(tempfile.mkdtemp(dir=dest_dir, prefix=f".{extract_to.name}-"))
+    try:
+        with tarfile.open(archive_path, "r:gz") as tar:
+            # TheRock tarballs are official AMD-published builds (trusted
+            # source) and contain absolute symlinks baked in from the build
+            # machine; the strict `data_filter` rejects those as escaping the
+            # destination, so use `fully_trusted_filter` instead.
+            tar.extractall(
+                tmp_dir,
+                filter=getattr(tarfile, "fully_trusted_filter", None),
+            )
+    except BaseException:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    if extract_to.exists():
+        shutil.rmtree(extract_to)
+    tmp_dir.rename(extract_to)
     return extract_to

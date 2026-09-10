@@ -17,7 +17,7 @@ class ConfirmScreen(ModalScreen[bool]):
         align: center middle;
     }
     #confirm_dialog {
-        width: auto;
+        width: 60;
         height: auto;
         padding: 1 2;
         border: thick $background 80%;
@@ -25,11 +25,13 @@ class ConfirmScreen(ModalScreen[bool]):
     }
     #confirm_message {
         width: 100%;
+        height: auto;
         margin-bottom: 1;
         content-align: center middle;
     }
     #confirm_buttons {
-        width: auto;
+        width: 100%;
+        height: auto;
         align: center middle;
     }
     #confirm_buttons Button {

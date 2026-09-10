@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+### Fixed
+- Extraction wrote directly into the final versioned directory; an interrupted extraction left a partial directory that was subsequently treated as a valid installed build. Extraction now happens in a temporary directory and is atomically renamed into place only on success.
+- The delete confirmation dialog had a broken shape caused by `width: 100%` on its message inside an `auto`-width dialog (undefined percent basis); the dialog now has a fixed width.
+
+### Changed
+- Raised the per-read socket timeout from 60s to 300s to reduce retry churn on slow (but not dead) network stretches during large downloads.
+
 ## 0.4.0
 
 ### Changed
