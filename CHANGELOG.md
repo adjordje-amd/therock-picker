@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+### Fixed
+- The TheRock root path (config file, TUI input) was not stripped of leading/trailing whitespace; a value like `" /home/user/therock"` was treated as a relative path, causing downloads/extraction to land under a bogus directory literally named `" "`. Path is now trimmed on load, save, and read from the TUI input.
+
 ## 0.4.1
 
 ### Fixed

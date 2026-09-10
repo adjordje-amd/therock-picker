@@ -150,7 +150,7 @@ class TheRockApp(App[None]):
         self._refresh_selected_label()
 
     def _therock_path(self) -> Path:
-        raw_path = self.query_one("#dir_input", Input).value or load_therock_path()
+        raw_path = self.query_one("#dir_input", Input).value.strip() or load_therock_path()
         save_therock_path(raw_path)
         return Path(raw_path).expanduser()
 

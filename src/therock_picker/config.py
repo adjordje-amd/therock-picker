@@ -44,9 +44,9 @@ def load_therock_path() -> str:
     and a `selected` symlink pointing at the active version.
     """
     path = _load_config().get("therock_path")
-    return path if isinstance(path, str) else DEFAULT_THEROCK_PATH
+    return path.strip() if isinstance(path, str) and path.strip() else DEFAULT_THEROCK_PATH
 
 
 def save_therock_path(path: str) -> None:
     """Persist `path` as the TheRock root path for future runs."""
-    _save_config_key("therock_path", path)
+    _save_config_key("therock_path", path.strip())
