@@ -166,5 +166,12 @@ def extract_build(archive_path: Path, dest_dir: Path) -> Path:
     extract_to = dest_dir / archive_path.name[: -len(".tar.gz")]
     extract_to.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, "r:gz") as tar:
-        tar.extractall(extract_to, filter=getattr(tarfile, "data_filter", None))
+        # TheRock tarballs are official AMD-published builds (trusted
+        # source) and contain absolute symlinks baked in from the build
+        # machine; the strict `data_filter` rejects those as escaping the
+        # destination, so use `fully_trusted_filter` instead.
+        tar.extractall(
+            extract_to,
+            filter=getattr(tarfile, "fully_trusted_filter", None),
+        )
     return extract_to

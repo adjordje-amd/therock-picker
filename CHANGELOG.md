@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+- Extraction of official TheRock tarballs could fail with `... would link to ... which is outside the destination` because Python's strict `data_filter` rejected the tarballs' baked-in absolute symlinks; extraction now uses `fully_trusted_filter` since these are official AMD-published builds.
+
 ## 0.3.0
 
 ### Added
