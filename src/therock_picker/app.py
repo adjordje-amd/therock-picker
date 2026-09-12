@@ -7,7 +7,7 @@ import os
 import platform as platform_module
 import tarfile
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from rich.text import Text
 from textual import on, work
@@ -80,7 +80,7 @@ class TheRockApp(App[None]):
     TabPane { height: 1fr; }
     """
 
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS: ClassVar = [("q", "quit", "Quit")]
 
     def __init__(self) -> None:
         super().__init__()
@@ -106,36 +106,34 @@ class TheRockApp(App[None]):
             )
         yield Label("", id="selected_label")
         with TabbedContent():
-            with TabPane("Local", id="local_tab"):
-                with Vertical(id="local_tab_body"):
-                    with Horizontal(id="local_actions"):
-                        yield Button("Scan directory", id="scan_button", compact=True)
-                        yield Button("Select", id="select_button", compact=True)
-                        yield Button("Delete", id="delete_button", compact=True)
-                    yield DataTable(id="local_table")
-            with TabPane("Remote", id="remote_tab"):
-                with Vertical(id="remote_tab_body"):
-                    with Horizontal(id="remote_filters"):
-                        yield Label("GPU:")
-                        yield Select(
-                            [("All GPU targets", _ALL_GFX)],
-                            id="gfx_filter",
-                            value=_ALL_GFX,
-                            compact=True,
-                        )
-                        yield Label("Platform:")
-                        yield Select(
-                            [("All systems", _ALL_PLATFORM)],
-                            id="platform_filter",
-                            value=_ALL_PLATFORM,
-                            compact=True,
-                        )
-                    with Horizontal(id="remote_actions"):
-                        yield Button("Refresh", id="refresh_button", compact=True)
-                        yield Button("Download", id="download_button", compact=True)
-                    yield DataTable(id="remote_table")
-                    yield ProgressBar(id="download_progress")
-                    yield Label("", id="status_label")
+            with TabPane("Local", id="local_tab"), Vertical(id="local_tab_body"):
+                with Horizontal(id="local_actions"):
+                    yield Button("Scan directory", id="scan_button", compact=True)
+                    yield Button("Select", id="select_button", compact=True)
+                    yield Button("Delete", id="delete_button", compact=True)
+                yield DataTable(id="local_table")
+            with TabPane("Remote", id="remote_tab"), Vertical(id="remote_tab_body"):
+                with Horizontal(id="remote_filters"):
+                    yield Label("GPU:")
+                    yield Select(
+                        [("All GPU targets", _ALL_GFX)],
+                        id="gfx_filter",
+                        value=_ALL_GFX,
+                        compact=True,
+                    )
+                    yield Label("Platform:")
+                    yield Select(
+                        [("All systems", _ALL_PLATFORM)],
+                        id="platform_filter",
+                        value=_ALL_PLATFORM,
+                        compact=True,
+                    )
+                with Horizontal(id="remote_actions"):
+                    yield Button("Refresh", id="refresh_button", compact=True)
+                    yield Button("Download", id="download_button", compact=True)
+                yield DataTable(id="remote_table")
+                yield ProgressBar(id="download_progress")
+                yield Label("", id="status_label")
         yield Footer()
 
     def on_mount(self) -> None:

@@ -21,7 +21,7 @@ NEW_INDEX_URL = "https://nightly.repo.amd.com/rocm/core/tarball/"
 LEGACY_INDEX_URL = "https://rocm.nightlies.amd.com/tarball-multi-arch/"
 CUTOVER_DATE = date(2026, 8, 23)
 
-_FILES_RE = re.compile(r"const files = (\[.*?\]);", re.S)
+_FILES_RE = re.compile(r"const files = (\[.*?\]);", re.DOTALL)
 _CHUNK_SIZE = 1 << 16
 _READ_TIMEOUT = 300
 _MAX_RETRIES = 5
