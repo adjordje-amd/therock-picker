@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 _PREFIX = "therock-dist-"
 _SUFFIX = ".tar.gz"
+_NIGHTLY_DATE_RE = re.compile(r"a(\d{8})$")
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,7 @@ class TheRockBuild:
         version: Package version, e.g. "7.15.0a20260815".
         filename: Original tarball filename.
         mtime: Modification time as a Unix timestamp, if known.
+        index_url: Nightly index directory that hosts this tarball.
     """
 
     platform: str
@@ -29,6 +33,7 @@ class TheRockBuild:
     version: str
     filename: str
     mtime: Optional[float] = None
+    index_url: str = ""
 
 
 def parse_therock_filename(
@@ -66,3 +71,20 @@ def parse_therock_filename(
         filename=name,
         mtime=mtime,
     )
+
+
+def nightly_date(version: str) -> Optional[date]:
+    """Return the nightly calendar date encoded in `version`, if any.
+
+    Nightly versions look like `10.1.0a20260823` (the `aYYYYMMDD` suffix).
+    Returns None when the version has no such suffix or the digits are not
+    a valid date.
+    """
+    match = _NIGHTLY_DATE_RE.search(version)
+    if match is None:
+        return None
+    raw = match.group(1)
+    try:
+        return date(int(raw[0:4]), int(raw[4:6]), int(raw[6:8]))
+    except ValueError:
+        return None

@@ -40,6 +40,7 @@ from therock_picker.local import (
 )
 from therock_picker.models import TheRockBuild
 from therock_picker.remote import (
+    RemoteFetchResult,
     build_url,
     download_build,
     extract_build,
@@ -255,13 +256,14 @@ class TheRockApp(App[None]):
     def _fetch_remote_builds(self) -> None:
         self.call_from_thread(self._set_status, "Fetching remote build list...")
         try:
-            builds = fetch_remote_builds()
+            result = fetch_remote_builds()
         except (OSError, ValueError) as exc:
             self.call_from_thread(self._set_status, f"Fetch failed: {exc}")
             return
-        self.call_from_thread(self._on_remote_builds_loaded, builds)
+        self.call_from_thread(self._on_remote_builds_loaded, result)
 
-    def _on_remote_builds_loaded(self, builds: list[TheRockBuild]) -> None:
+    def _on_remote_builds_loaded(self, result: RemoteFetchResult) -> None:
+        builds = result.builds
         self._remote_builds = builds
 
         gfx_targets = sorted({build.gfx_target for build in builds})
@@ -291,7 +293,10 @@ class TheRockApp(App[None]):
             platform_filter.value = _ALL_PLATFORM
 
         self._refresh_remote_table()
-        self._set_status(f"Loaded {len(builds)} remote build(s)")
+        status = f"Loaded {len(builds)} remote build(s)"
+        if result.warnings:
+            status += "; " + "; ".join(result.warnings)
+        self._set_status(status)
 
     @on(Select.Changed, "#gfx_filter")
     def _handle_gfx_filter_changed(self) -> None:

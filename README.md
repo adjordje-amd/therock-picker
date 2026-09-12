@@ -5,7 +5,7 @@ Terminal UI (Textual) to browse local and remote AMD [TheRock](https://github.co
 ## Features
 
 - **Local tab** — scans a `versions/` directory for downloaded (`.tar.gz`) and extracted builds, and lets you pick one as the active version.
-- **Remote tab** — lists nightly tarballs from `rocm.nightlies.amd.com`, filterable by GPU target and platform (auto-detected via `rocminfo` when available), with download + extract + progress reporting.
+- **Remote tab** — lists nightly tarballs from both AMD indexes ([2026-08-23 and later](https://nightly.repo.amd.com/rocm/core/tarball/) and [2026-08-22 and earlier](https://rocm.nightlies.amd.com/tarball-multi-arch/)), filterable by GPU target and platform (auto-detected via `rocminfo` when available), with download + extract + progress reporting. Downloads use the host that published that night's tarball.
 
 ## Install
 
