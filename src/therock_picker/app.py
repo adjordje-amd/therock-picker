@@ -7,7 +7,7 @@ import os
 import platform as platform_module
 import tarfile
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from rich.text import Text
 from textual import on, work
@@ -40,6 +40,7 @@ from therock_picker.local import (
 )
 from therock_picker.models import TheRockBuild
 from therock_picker.remote import (
+    RemoteFetchResult,
     build_url,
     download_build,
     extract_build,
@@ -79,7 +80,7 @@ class TheRockApp(App[None]):
     TabPane { height: 1fr; }
     """
 
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS: ClassVar = [("q", "quit", "Quit")]
 
     def __init__(self) -> None:
         super().__init__()
@@ -105,36 +106,34 @@ class TheRockApp(App[None]):
             )
         yield Label("", id="selected_label")
         with TabbedContent():
-            with TabPane("Local", id="local_tab"):
-                with Vertical(id="local_tab_body"):
-                    with Horizontal(id="local_actions"):
-                        yield Button("Scan directory", id="scan_button", compact=True)
-                        yield Button("Select", id="select_button", compact=True)
-                        yield Button("Delete", id="delete_button", compact=True)
-                    yield DataTable(id="local_table")
-            with TabPane("Remote", id="remote_tab"):
-                with Vertical(id="remote_tab_body"):
-                    with Horizontal(id="remote_filters"):
-                        yield Label("GPU:")
-                        yield Select(
-                            [("All GPU targets", _ALL_GFX)],
-                            id="gfx_filter",
-                            value=_ALL_GFX,
-                            compact=True,
-                        )
-                        yield Label("Platform:")
-                        yield Select(
-                            [("All systems", _ALL_PLATFORM)],
-                            id="platform_filter",
-                            value=_ALL_PLATFORM,
-                            compact=True,
-                        )
-                    with Horizontal(id="remote_actions"):
-                        yield Button("Refresh", id="refresh_button", compact=True)
-                        yield Button("Download", id="download_button", compact=True)
-                    yield DataTable(id="remote_table")
-                    yield ProgressBar(id="download_progress")
-                    yield Label("", id="status_label")
+            with TabPane("Local", id="local_tab"), Vertical(id="local_tab_body"):
+                with Horizontal(id="local_actions"):
+                    yield Button("Scan directory", id="scan_button", compact=True)
+                    yield Button("Select", id="select_button", compact=True)
+                    yield Button("Delete", id="delete_button", compact=True)
+                yield DataTable(id="local_table")
+            with TabPane("Remote", id="remote_tab"), Vertical(id="remote_tab_body"):
+                with Horizontal(id="remote_filters"):
+                    yield Label("GPU:")
+                    yield Select(
+                        [("All GPU targets", _ALL_GFX)],
+                        id="gfx_filter",
+                        value=_ALL_GFX,
+                        compact=True,
+                    )
+                    yield Label("Platform:")
+                    yield Select(
+                        [("All systems", _ALL_PLATFORM)],
+                        id="platform_filter",
+                        value=_ALL_PLATFORM,
+                        compact=True,
+                    )
+                with Horizontal(id="remote_actions"):
+                    yield Button("Refresh", id="refresh_button", compact=True)
+                    yield Button("Download", id="download_button", compact=True)
+                yield DataTable(id="remote_table")
+                yield ProgressBar(id="download_progress")
+                yield Label("", id="status_label")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -255,13 +254,14 @@ class TheRockApp(App[None]):
     def _fetch_remote_builds(self) -> None:
         self.call_from_thread(self._set_status, "Fetching remote build list...")
         try:
-            builds = fetch_remote_builds()
+            result = fetch_remote_builds()
         except (OSError, ValueError) as exc:
             self.call_from_thread(self._set_status, f"Fetch failed: {exc}")
             return
-        self.call_from_thread(self._on_remote_builds_loaded, builds)
+        self.call_from_thread(self._on_remote_builds_loaded, result)
 
-    def _on_remote_builds_loaded(self, builds: list[TheRockBuild]) -> None:
+    def _on_remote_builds_loaded(self, result: RemoteFetchResult) -> None:
+        builds = result.builds
         self._remote_builds = builds
 
         gfx_targets = sorted({build.gfx_target for build in builds})
@@ -291,7 +291,10 @@ class TheRockApp(App[None]):
             platform_filter.value = _ALL_PLATFORM
 
         self._refresh_remote_table()
-        self._set_status(f"Loaded {len(builds)} remote build(s)")
+        status = f"Loaded {len(builds)} remote build(s)"
+        if result.warnings:
+            status += "; " + "; ".join(result.warnings)
+        self._set_status(status)
 
     @on(Select.Changed, "#gfx_filter")
     def _handle_gfx_filter_changed(self) -> None:

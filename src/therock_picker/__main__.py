@@ -4,7 +4,12 @@ import argparse
 import sys
 
 from therock_picker.app import TheRockApp
-from therock_picker.update import current_version, fetch_latest_version, is_newer, perform_update
+from therock_picker.update import (
+    current_version,
+    fetch_latest_version,
+    is_newer,
+    perform_update,
+)
 
 
 def _run_update() -> int:

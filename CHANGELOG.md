@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3
+
+### Changed
+- Remote tab merges AMD nightlies from both tarball indexes: `nightly.repo.amd.com` for 2026-08-23 onward and `rocm.nightlies.amd.com` for earlier builds, and downloads each tarball from the matching host.
+
 ## 0.4.2
 
 ### Fixed
