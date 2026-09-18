@@ -15,6 +15,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
+    Checkbox,
     DataTable,
     Footer,
     Header,
@@ -27,7 +28,12 @@ from textual.widgets import (
 )
 from textual.widgets.data_table import RowKey
 
-from therock_picker.config import load_therock_path, save_therock_path
+from therock_picker.config import (
+    load_therock_path,
+    load_use_rc_builds,
+    save_therock_path,
+    save_use_rc_builds,
+)
 from therock_picker.confirm_screen import ConfirmScreen
 from therock_picker.gpu_detect import detect_local_gfx_targets, gfx_bucket_matches
 from therock_picker.local import (
@@ -40,6 +46,8 @@ from therock_picker.local import (
 )
 from therock_picker.models import TheRockBuild
 from therock_picker.remote import (
+    DEFAULT_INDEX_URL,
+    RC_INDEX_URL,
     build_url,
     download_build,
     extract_build,
@@ -92,6 +100,12 @@ class TheRockApp(App[None]):
         self._detected_platform = _SYSTEM_TO_PLATFORM.get(
             platform_module.system()
         )
+        self._use_rc_builds = load_use_rc_builds()
+        self._loaded_index_url = self._index_url
+
+    @property
+    def _index_url(self) -> str:
+        return RC_INDEX_URL if self._use_rc_builds else DEFAULT_INDEX_URL
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -129,6 +143,12 @@ class TheRockApp(App[None]):
                             value=_ALL_PLATFORM,
                             compact=True,
                         )
+                        yield Checkbox(
+                            "RC builds",
+                            value=self._use_rc_builds,
+                            id="rc_checkbox",
+                            compact=True,
+                        )
                     with Horizontal(id="remote_actions"):
                         yield Button("Refresh", id="refresh_button", compact=True)
                         yield Button("Download", id="download_button", compact=True)
@@ -146,8 +166,10 @@ class TheRockApp(App[None]):
         remote_table.cursor_type = "row"
         remote_table.add_columns(*_REMOTE_COLUMNS)
 
+        self._handle_scan()
         self._fetch_remote_builds()
         self._refresh_selected_label()
+        local_table.focus()
 
     def _therock_path(self) -> Path:
         raw_path = self.query_one("#dir_input", Input).value.strip() or load_therock_path()
@@ -251,18 +273,28 @@ class TheRockApp(App[None]):
     def _handle_refresh(self) -> None:
         self._fetch_remote_builds()
 
+    @on(Checkbox.Changed, "#rc_checkbox")
+    def _handle_rc_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        self._use_rc_builds = event.value
+        save_use_rc_builds(self._use_rc_builds)
+        self._fetch_remote_builds()
+
     @work(thread=True)
     def _fetch_remote_builds(self) -> None:
         self.call_from_thread(self._set_status, "Fetching remote build list...")
+        index_url = self._index_url
         try:
-            builds = fetch_remote_builds()
+            builds = fetch_remote_builds(index_url=index_url)
         except (OSError, ValueError) as exc:
             self.call_from_thread(self._set_status, f"Fetch failed: {exc}")
             return
-        self.call_from_thread(self._on_remote_builds_loaded, builds)
+        self.call_from_thread(self._on_remote_builds_loaded, builds, index_url)
 
-    def _on_remote_builds_loaded(self, builds: list[TheRockBuild]) -> None:
+    def _on_remote_builds_loaded(
+        self, builds: list[TheRockBuild], index_url: str
+    ) -> None:
         self._remote_builds = builds
+        self._loaded_index_url = index_url
 
         gfx_targets = sorted({build.gfx_target for build in builds})
         gfx_options = [("All GPU targets", _ALL_GFX)]
@@ -317,7 +349,7 @@ class TheRockApp(App[None]):
                 and build.platform != platform_filter
             ):
                 continue
-            url = build_url(build)
+            url = build_url(build, self._loaded_index_url)
             row_key = table.add_row(
                 build.version,
                 build.gfx_target,
@@ -343,11 +375,13 @@ class TheRockApp(App[None]):
             self._set_status("Select a remote build to download first.")
             return
         root = self._therock_path()
-        self._download_worker(build, versions_dir(root), selected_link(root))
+        self._download_worker(
+            build, versions_dir(root), selected_link(root), self._loaded_index_url
+        )
 
     @work(thread=True, exclusive=True)
     def _download_worker(
-        self, build: TheRockBuild, dest_dir: Path, symlink: Path
+        self, build: TheRockBuild, dest_dir: Path, symlink: Path, index_url: str
     ) -> None:
         self.call_from_thread(
             self._set_status, f"Downloading {build.filename}..."
@@ -357,7 +391,9 @@ class TheRockApp(App[None]):
             self.call_from_thread(self._update_progress, read, total)
 
         try:
-            archive_path = download_build(build, dest_dir, on_progress=on_progress)
+            archive_path = download_build(
+                build, dest_dir, index_url=index_url, on_progress=on_progress
+            )
         except (OSError, http.client.IncompleteRead) as exc:
             self.call_from_thread(self._set_status, f"Download failed: {exc}")
             return

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+- Remote tab: "RC builds" checkbox to switch the fetched build index between Nightly and RC (release candidate) tarballs.
+- Local tab now auto-scans the configured TheRock path on startup, and gets keyboard focus by default (instead of the TheRock path input).
+
+### Changed
+- Updated the default nightly tarball index URL to `nightly.repo.amd.com` (the old `rocm.nightlies.amd.com` host is retired).
+
 ## 0.4.2
 
 ### Fixed

@@ -16,7 +16,8 @@ from typing import Callable, Optional
 
 from therock_picker.models import TheRockBuild, parse_therock_filename
 
-DEFAULT_INDEX_URL = "https://rocm.nightlies.amd.com/tarball-multi-arch/"
+DEFAULT_INDEX_URL = "https://nightly.repo.amd.com/rocm/core/tarball/"
+RC_INDEX_URL = "https://rc.repo.amd.com/rocm/core/tarball/"
 
 _FILES_RE = re.compile(r"const files = (\[.*?\]);", re.S)
 _CHUNK_SIZE = 1 << 16

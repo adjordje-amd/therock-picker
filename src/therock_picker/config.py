@@ -29,7 +29,7 @@ def _load_config() -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _save_config_key(key: str, value: str) -> None:
+def _save_config_key(key: str, value: str | bool) -> None:
     config_file = _config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
     data = _load_config()
@@ -50,3 +50,13 @@ def load_therock_path() -> str:
 def save_therock_path(path: str) -> None:
     """Persist `path` as the TheRock root path for future runs."""
     _save_config_key("therock_path", path.strip())
+
+
+def load_use_rc_builds() -> bool:
+    """Return whether the Remote tab should default to RC builds."""
+    return bool(_load_config().get("use_rc_builds", False))
+
+
+def save_use_rc_builds(use_rc_builds: bool) -> None:
+    """Persist whether the Remote tab should default to RC builds."""
+    _save_config_key("use_rc_builds", use_rc_builds)
