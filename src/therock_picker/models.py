@@ -21,6 +21,8 @@ class TheRockBuild:
         version: Package version, e.g. "7.15.0a20260815".
         filename: Original tarball filename.
         mtime: Modification time as a Unix timestamp, if known.
+        channel: Release channel ("nightly", "rc", "dev") the build was
+            listed under; empty when unknown.
     """
 
     platform: str
@@ -29,6 +31,7 @@ class TheRockBuild:
     version: str
     filename: str
     mtime: Optional[float] = None
+    channel: str = ""
 
 
 def parse_therock_filename(

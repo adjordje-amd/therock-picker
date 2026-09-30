@@ -10,6 +10,7 @@ import socket
 import tarfile
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
@@ -18,6 +19,14 @@ from therock_picker.models import TheRockBuild, parse_therock_filename
 
 DEFAULT_INDEX_URL = "https://nightly.repo.amd.com/rocm/core/tarball/"
 RC_INDEX_URL = "https://rc.repo.amd.com/rocm/core/tarball/"
+DEV_INDEX_URL = "https://dev.repo.amd.com/rocm/core/tarball/"
+
+DEFAULT_CHANNEL = "nightly"
+CHANNEL_INDEX_URLS = {
+    "nightly": DEFAULT_INDEX_URL,
+    "rc": RC_INDEX_URL,
+    "dev": DEV_INDEX_URL,
+}
 
 _FILES_RE = re.compile(r"const files = (\[.*?\]);", re.S)
 _CHUNK_SIZE = 1 << 16
@@ -78,7 +87,7 @@ def fetch_remote_builds(
 
 def build_url(build: TheRockBuild, index_url: str = DEFAULT_INDEX_URL) -> str:
     """Return the direct download URL for `build`'s tarball."""
-    return index_url.rstrip("/") + "/" + build.filename
+    return index_url.rstrip("/") + "/" + urllib.parse.quote(build.filename)
 
 
 def download_build(

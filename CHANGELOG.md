@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+- Remote tab: "Channel" filter (All / Nightly / RC / Dev) next to the GPU and Platform filters, plus a Channel column. All three indexes are fetched together and filtered locally. Dev builds come from `dev.repo.amd.com`, with the git hash in their version shortened for display.
+
+### Changed
+- The "RC builds" checkbox is replaced by the Channel filter. The setting is persisted as `channel`; legacy `use_rc_builds` is still honored when `channel` is absent.
+
+### Fixed
+- Download URLs are now percent-encoded, so dev tarballs (with `+` in the version) no longer fail.
+
 ## 0.5.0
 
 ### Added

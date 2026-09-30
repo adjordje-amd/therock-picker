@@ -6,6 +6,7 @@ import http.client
 import os
 import platform as platform_module
 import tarfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional
 
@@ -15,7 +16,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
-    Checkbox,
     DataTable,
     Footer,
     Header,
@@ -30,9 +30,9 @@ from textual.widgets.data_table import RowKey
 
 from therock_picker.config import (
     load_therock_path,
-    load_use_rc_builds,
+    load_channel,
+    save_channel,
     save_therock_path,
-    save_use_rc_builds,
 )
 from therock_picker.confirm_screen import ConfirmScreen
 from therock_picker.gpu_detect import detect_local_gfx_targets, gfx_bucket_matches
@@ -46,8 +46,8 @@ from therock_picker.local import (
 )
 from therock_picker.models import TheRockBuild
 from therock_picker.remote import (
-    DEFAULT_INDEX_URL,
-    RC_INDEX_URL,
+    CHANNEL_INDEX_URLS,
+    DEFAULT_CHANNEL,
     build_url,
     download_build,
     extract_build,
@@ -57,9 +57,26 @@ from therock_picker.update import current_version
 
 _ALL_GFX = "__all__"
 _ALL_PLATFORM = "__all__"
+_ALL_CHANNELS = "all"
 _SYSTEM_TO_PLATFORM = {"Linux": "linux", "Windows": "windows"}
 
-_REMOTE_COLUMNS = ("Version", "GFX Target", "Variant", "Platform", "URL")
+_SHORT_HASH_LEN = 8
+
+
+def _short_version(version: str) -> str:
+    """Shorten the git hash in dev versions ("10.2.0.dev0+<sha>")."""
+    base, sep, commit = version.partition("+")
+    return f"{base}{sep}{commit[:_SHORT_HASH_LEN]}"
+
+
+_REMOTE_COLUMNS = (
+    "Version",
+    "Channel",
+    "GFX Target",
+    "Variant",
+    "Platform",
+    "URL",
+)
 _LOCAL_COLUMNS = ("Version", "GFX Target", "Variant", "Platform", "Type", "Path")
 
 
@@ -100,12 +117,9 @@ class TheRockApp(App[None]):
         self._detected_platform = _SYSTEM_TO_PLATFORM.get(
             platform_module.system()
         )
-        self._use_rc_builds = load_use_rc_builds()
-        self._loaded_index_url = self._index_url
-
-    @property
-    def _index_url(self) -> str:
-        return RC_INDEX_URL if self._use_rc_builds else DEFAULT_INDEX_URL
+        channel = load_channel()
+        valid_channels = (_ALL_CHANNELS, *CHANNEL_INDEX_URLS)
+        self._channel = channel if channel in valid_channels else DEFAULT_CHANNEL
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -129,6 +143,19 @@ class TheRockApp(App[None]):
             with TabPane("Remote", id="remote_tab"):
                 with Vertical(id="remote_tab_body"):
                     with Horizontal(id="remote_filters"):
+                        yield Label("Channel:")
+                        yield Select(
+                            [
+                                ("All channels", _ALL_CHANNELS),
+                                ("Nightly", "nightly"),
+                                ("RC", "rc"),
+                                ("Dev", "dev"),
+                            ],
+                            id="channel_filter",
+                            value=self._channel,
+                            allow_blank=False,
+                            compact=True,
+                        )
                         yield Label("GPU:")
                         yield Select(
                             [("All GPU targets", _ALL_GFX)],
@@ -143,12 +170,7 @@ class TheRockApp(App[None]):
                             value=_ALL_PLATFORM,
                             compact=True,
                         )
-                        yield Checkbox(
-                            "RC builds",
-                            value=self._use_rc_builds,
-                            id="rc_checkbox",
-                            compact=True,
-                        )
+
                     with Horizontal(id="remote_actions"):
                         yield Button("Refresh", id="refresh_button", compact=True)
                         yield Button("Download", id="download_button", compact=True)
@@ -273,28 +295,36 @@ class TheRockApp(App[None]):
     def _handle_refresh(self) -> None:
         self._fetch_remote_builds()
 
-    @on(Checkbox.Changed, "#rc_checkbox")
-    def _handle_rc_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        self._use_rc_builds = event.value
-        save_use_rc_builds(self._use_rc_builds)
-        self._fetch_remote_builds()
+    @on(Select.Changed, "#channel_filter")
+    def _handle_channel_filter_changed(self, event: Select.Changed) -> None:
+        self._channel = str(event.value)
+        save_channel(self._channel)
+        self._refresh_remote_table()
 
     @work(thread=True)
     def _fetch_remote_builds(self) -> None:
         self.call_from_thread(self._set_status, "Fetching remote build list...")
-        index_url = self._index_url
-        try:
-            builds = fetch_remote_builds(index_url=index_url)
-        except (OSError, ValueError) as exc:
-            self.call_from_thread(self._set_status, f"Fetch failed: {exc}")
+        builds: list[TheRockBuild] = []
+        errors: list[str] = []
+        for channel, index_url in CHANNEL_INDEX_URLS.items():
+            try:
+                fetched = fetch_remote_builds(index_url=index_url)
+            except (OSError, ValueError) as exc:
+                errors.append(f"{channel}: {exc}")
+                continue
+            builds += [replace(build, channel=channel) for build in fetched]
+        if not builds and errors:
+            self.call_from_thread(
+                self._set_status, f"Fetch failed: {'; '.join(errors)}"
+            )
             return
-        self.call_from_thread(self._on_remote_builds_loaded, builds, index_url)
+        builds.sort(key=lambda build: build.mtime or 0, reverse=True)
+        self.call_from_thread(self._on_remote_builds_loaded, builds, errors)
 
     def _on_remote_builds_loaded(
-        self, builds: list[TheRockBuild], index_url: str
+        self, builds: list[TheRockBuild], errors: list[str]
     ) -> None:
         self._remote_builds = builds
-        self._loaded_index_url = index_url
 
         gfx_targets = sorted({build.gfx_target for build in builds})
         gfx_options = [("All GPU targets", _ALL_GFX)]
@@ -323,7 +353,10 @@ class TheRockApp(App[None]):
             platform_filter.value = _ALL_PLATFORM
 
         self._refresh_remote_table()
-        self._set_status(f"Loaded {len(builds)} remote build(s)")
+        status = f"Loaded {len(builds)} remote build(s)"
+        if errors:
+            status += f" (failed: {'; '.join(errors)})"
+        self._set_status(status)
 
     @on(Select.Changed, "#gfx_filter")
     def _handle_gfx_filter_changed(self) -> None:
@@ -336,12 +369,15 @@ class TheRockApp(App[None]):
     def _refresh_remote_table(self) -> None:
         gfx_filter = self.query_one("#gfx_filter", Select).value
         platform_filter = self.query_one("#platform_filter", Select).value
+        channel_filter = self.query_one("#channel_filter", Select).value
         table = self.query_one("#remote_table", DataTable)
         table.clear()
         self._remote_row_builds.clear()
         self._selected_remote_build = None
 
         for build in self._remote_builds:
+            if channel_filter != _ALL_CHANNELS and build.channel != channel_filter:
+                continue
             if gfx_filter != _ALL_GFX and build.gfx_target != gfx_filter:
                 continue
             if (
@@ -349,9 +385,10 @@ class TheRockApp(App[None]):
                 and build.platform != platform_filter
             ):
                 continue
-            url = build_url(build, self._loaded_index_url)
+            url = build_url(build, CHANNEL_INDEX_URLS[build.channel])
             row_key = table.add_row(
-                build.version,
+                _short_version(build.version),
+                build.channel,
                 build.gfx_target,
                 build.variant or "-",
                 build.platform,
@@ -376,7 +413,10 @@ class TheRockApp(App[None]):
             return
         root = self._therock_path()
         self._download_worker(
-            build, versions_dir(root), selected_link(root), self._loaded_index_url
+            build,
+            versions_dir(root),
+            selected_link(root),
+            CHANNEL_INDEX_URLS[build.channel],
         )
 
     @work(thread=True, exclusive=True)

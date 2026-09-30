@@ -29,7 +29,7 @@ def _load_config() -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _save_config_key(key: str, value: str | bool) -> None:
+def _save_config_key(key: str, value: str) -> None:
     config_file = _config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
     data = _load_config()
@@ -52,11 +52,15 @@ def save_therock_path(path: str) -> None:
     _save_config_key("therock_path", path.strip())
 
 
-def load_use_rc_builds() -> bool:
-    """Return whether the Remote tab should default to RC builds."""
-    return bool(_load_config().get("use_rc_builds", False))
+def load_channel() -> str:
+    """Return the persisted build channel ("nightly", "rc" or "dev")."""
+    config = _load_config()
+    channel = config.get("channel")
+    if isinstance(channel, str):
+        return channel
+    return "rc" if config.get("use_rc_builds") else "nightly"
 
 
-def save_use_rc_builds(use_rc_builds: bool) -> None:
-    """Persist whether the Remote tab should default to RC builds."""
-    _save_config_key("use_rc_builds", use_rc_builds)
+def save_channel(channel: str) -> None:
+    """Persist the build channel for future runs."""
+    _save_config_key("channel", channel)
